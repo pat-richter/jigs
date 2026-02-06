@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Google Docs Instant Tab Search (Trusted Types Fix)
+// @name         Google Docs Instant Tab Search (Focus Fix)
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  Instant tab switching for Google Docs, searching by tab names. Hotkey: ALT+Z ALT+Z (opens menus, then opens modal)
-// @author       AI
+// @version      1.2
+// @description  Instant tab switching with guaranteed input focus
+// @author       AI / Gemini
 // @match        https://docs.google.com/document/d/*
 // @grant        none
 // ==/UserScript==
@@ -15,7 +15,6 @@
     const SHORTCUT_KEY = 'z'; // Alt + Z
     const PALETTE_WIDTH = '450px';
 
-    // Create Palette Container
     const container = document.createElement('div');
     container.id = 'tab-search-palette';
     Object.assign(container.style, {
@@ -25,7 +24,6 @@
         display: 'none', flexDirection: 'column', overflow: 'hidden', fontFamily: 'Segoe UI, Arial, sans-serif'
     });
 
-    // Create Input Field
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'Search tabs...';
@@ -34,7 +32,6 @@
         outline: 'none', borderBottom: '1px solid #eee', boxSizing: 'border-box'
     });
 
-    // Create Results List
     const resultsList = document.createElement('div');
     resultsList.id = 'tab-results';
     Object.assign(resultsList.style, {
@@ -49,9 +46,7 @@
     let selectedIndex = 0;
     let filteredTabs = [];
 
-    // Finds tabs in the left sidebar
     function scrapeTabs() {
-        // This selector targets the actual Tab items in the new Google Docs Tab UI
         const tabElements = document.querySelectorAll('.chapter-item-label-and-buttons-container');
         return Array.from(tabElements).map(el => {
             const label = el.querySelector('.chapter-label-content');
@@ -63,12 +58,10 @@
     }
 
     function renderResults() {
-        // replaceChildren() is the safe way to clear a list without using innerHTML
         resultsList.replaceChildren();
-
         filteredTabs.forEach((tab, index) => {
             const div = document.createElement('div');
-            div.textContent = tab.name; // textContent is safe for Trusted Types
+            div.textContent = tab.name;
             Object.assign(div.style, {
                 padding: '12px 15px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0',
                 backgroundColor: index === selectedIndex ? '#e8f0fe' : '#fff',
@@ -78,7 +71,6 @@
             div.onclick = () => selectTab(index);
             resultsList.appendChild(div);
 
-            // Keep selected item in view
             if (index === selectedIndex) {
                 div.scrollIntoView({ block: 'nearest' });
             }
@@ -103,15 +95,20 @@
         filteredTabs = tabs;
         selectedIndex = 0;
         container.style.display = 'flex';
-        input.focus();
+        
+        // --- FIX: Using setTimeout to ensure focus triggers after UI render ---
+        setTimeout(() => {
+            input.focus();
+            input.select();
+        }, 10);
+
         renderResults();
     }
 
-    // Keyboard Listeners
     window.addEventListener('keydown', (e) => {
-        // Alt + Q to open
         if (e.altKey && e.key.toLowerCase() === SHORTCUT_KEY) {
             e.preventDefault();
+            e.stopImmediatePropagation(); // Prevents other listeners from interfering
             container.style.display === 'none' ? openPalette() : closePalette();
         }
 
