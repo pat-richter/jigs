@@ -1,0 +1,143 @@
+// ==UserScript==
+// @name         Google Docs Instant Tab Search (Trusted Types Fix)
+// @namespace    http://tampermonkey.net/
+// @version      1.1
+// @description  Instant tab switching for Google Docs, searching by tab names. Hotkey: ALT+Z ALT+Z (opens menus, then opens modal)
+// @author       AI
+// @match        https://docs.google.com/document/d/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // --- CONFIGURATION ---
+    const SHORTCUT_KEY = 'z'; // Alt + Z
+    const PALETTE_WIDTH = '450px';
+
+    // Create Palette Container
+    const container = document.createElement('div');
+    container.id = 'tab-search-palette';
+    Object.assign(container.style, {
+        position: 'fixed', top: '20%', left: '50%', transform: 'translateX(-50%)',
+        width: PALETTE_WIDTH, backgroundColor: '#ffffff', border: '1px solid #ccc',
+        borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', zIndex: '10000',
+        display: 'none', flexDirection: 'column', overflow: 'hidden', fontFamily: 'Segoe UI, Arial, sans-serif'
+    });
+
+    // Create Input Field
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Search tabs...';
+    Object.assign(input.style, {
+        width: '100%', padding: '15px', fontSize: '18px', border: 'none',
+        outline: 'none', borderBottom: '1px solid #eee', boxSizing: 'border-box'
+    });
+
+    // Create Results List
+    const resultsList = document.createElement('div');
+    resultsList.id = 'tab-results';
+    Object.assign(resultsList.style, {
+        maxHeight: '400px', overflowY: 'auto', backgroundColor: '#fff'
+    });
+
+    container.appendChild(input);
+    container.appendChild(resultsList);
+    document.body.appendChild(container);
+
+    let tabs = [];
+    let selectedIndex = 0;
+    let filteredTabs = [];
+
+    // Finds tabs in the left sidebar
+    function scrapeTabs() {
+        // This selector targets the actual Tab items in the new Google Docs Tab UI
+        const tabElements = document.querySelectorAll('.chapter-item-label-and-buttons-container');
+        return Array.from(tabElements).map(el => {
+            const label = el.querySelector('.chapter-label-content');
+            return {
+                name: label ? label.textContent.trim() : "Unnamed Tab",
+                element: el
+            };
+        }).filter(t => t.name !== "");
+    }
+
+    function renderResults() {
+        // replaceChildren() is the safe way to clear a list without using innerHTML
+        resultsList.replaceChildren();
+
+        filteredTabs.forEach((tab, index) => {
+            const div = document.createElement('div');
+            div.textContent = tab.name; // textContent is safe for Trusted Types
+            Object.assign(div.style, {
+                padding: '12px 15px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0',
+                backgroundColor: index === selectedIndex ? '#e8f0fe' : '#fff',
+                color: index === selectedIndex ? '#1967d2' : '#333',
+                fontWeight: index === selectedIndex ? '600' : '400'
+            });
+            div.onclick = () => selectTab(index);
+            resultsList.appendChild(div);
+
+            // Keep selected item in view
+            if (index === selectedIndex) {
+                div.scrollIntoView({ block: 'nearest' });
+            }
+        });
+    }
+
+    function selectTab(index) {
+        const target = filteredTabs[index];
+        if (target) {
+            target.element.click();
+            closePalette();
+        }
+    }
+
+    function closePalette() {
+        container.style.display = 'none';
+        input.value = '';
+    }
+
+    function openPalette() {
+        tabs = scrapeTabs();
+        filteredTabs = tabs;
+        selectedIndex = 0;
+        container.style.display = 'flex';
+        input.focus();
+        renderResults();
+    }
+
+    // Keyboard Listeners
+    window.addEventListener('keydown', (e) => {
+        // Alt + Q to open
+        if (e.altKey && e.key.toLowerCase() === SHORTCUT_KEY) {
+            e.preventDefault();
+            container.style.display === 'none' ? openPalette() : closePalette();
+        }
+
+        if (container.style.display === 'flex') {
+            if (e.key === 'Escape') {
+                closePalette();
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = Math.min(selectedIndex + 1, filteredTabs.length - 1);
+                renderResults();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = Math.max(selectedIndex - 1, 0);
+                renderResults();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                selectTab(selectedIndex);
+            }
+        }
+    }, true);
+
+    input.addEventListener('input', () => {
+        const query = input.value.toLowerCase();
+        filteredTabs = tabs.filter(t => t.name.toLowerCase().includes(query));
+        selectedIndex = 0;
+        renderResults();
+    });
+
+})();
